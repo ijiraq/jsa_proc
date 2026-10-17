@@ -21,12 +21,16 @@ Routines for downloading data from CADC.
 import requests
 from requests.exceptions import RequestException
 import os.path
+from cadcdata import CadcDataClient
+from cadcutils import net, exceptions
+from vos import Client
+
 
 from jsa_proc.error import JSAProcError
 
-jcmt_data_url = 'https://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/data/pub/JCMT/'
-
+ARCHIVE_NAME = 'JCMT'
 proxy_certificate = os.path.expanduser('~/.ssl/cadcproxy.pem')
+cred = net.Subject(certificate=proxy_certificate)
 
 
 def fetch_cadc_file(filename, output_directory, suffix='.sdf'):
@@ -57,25 +61,11 @@ def fetch_cadc_file(filename, output_directory, suffix='.sdf'):
     output_file_path = os.path.join(output_directory, local_file)
 
     try:
-        (args, kwargs) = _prepare_cadc_request(filename)
-
-        # Connect with stream=True for large files.
-        kwargs['stream'] = True
-
-        r = requests.get(*args, **kwargs)
-
-        # Check if its worked. (raises error if not okay)
-        r.raise_for_status()
-
-        # write out to a file in the requested output directory
-        with open(output_file_path, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=1024):
-                f.write(chunk)
-
-    except RequestException as e:
+        data_client = CadcDataClient(subject=cred)
+        data_client.get_file(ARCHIVE_NAME, filename, output_file_path)
+        return output_file_path
+    except Exception as e:
         raise JSAProcError('Error fetching CADC file: ' + str(e))
-
-    return output_file_path
 
 
 def fetch_cadc_file_info(filename):
@@ -86,6 +76,8 @@ def fetch_cadc_file_info(filename):
     """
 
     try:
+        data_client = CadcDataClient(subject=cred)
+        data_client.get_file_info(ARCHIVE_NAME, filename)
         (args, kwargs) = _prepare_cadc_request(filename)
 
         kwargs['allow_redirects'] = True
